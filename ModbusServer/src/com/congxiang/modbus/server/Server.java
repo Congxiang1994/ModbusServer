@@ -21,8 +21,6 @@ import java.util.Vector;
 import javax.swing.JFrame;
 import javax.swing.JScrollPane;
 import javax.swing.JTextArea;
-import javax.swing.Box.Filler;
-
 import com.congxiang.modbus.dao.SQLiteCRUD;
 import com.congxiang.modbus.dao.SQLiteConn;
 import com.congxiang.modbus.util.ByteUtil;
