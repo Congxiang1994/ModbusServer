@@ -921,7 +921,7 @@ public class Server {
 */
 		printInformation(1, "上位机客户端：发送给上位机的实时设备状态信息为：" + strModbusSingleStateData);
 		
-		// 3.将modbusdata实时监测数据发送给上位机
+		// 3.将单条modbusdata实时设备状态消息发送给上位机
 		byte[] byteModbusSingleStateData = (new String(new byte[] { 0x0C }) + strModbusSingleStateData).getBytes();
 		for(int m = 0; m< hostClientList.size(); m++){
 			sendMsg(hostClientList.get(m).buffOutputStream, byteModbusSingleStateData, byteModbusSingleStateData.length);// ---------------------------------------------------------------------write
