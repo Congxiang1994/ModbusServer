@@ -21,6 +21,7 @@ import java.util.Vector;
 import javax.swing.JFrame;
 import javax.swing.JScrollPane;
 import javax.swing.JTextArea;
+
 import com.congxiang.modbus.dao.SQLiteCRUD;
 import com.congxiang.modbus.dao.SQLiteConn;
 import com.congxiang.modbus.util.ByteUtil;
@@ -238,7 +239,9 @@ public class Server {
 			printInformation(1, "上位机客户端：开始进入上位机客户端线程");
 			hostConnectionStarted = true;
 			
-			
+			/* 启动发送modbus命令给上位机的线程  */ 
+			SendModbusOrderToHostThread sendModbusOrderToHostThread = new SendModbusOrderToHostThread(buffOutputStream);
+			sendModbusOrderToHostThread.start();
 			
 			while (hostConnectionStarted) {
 				printInformation(1, "\n" + "上位机客户端：进入循环，开始接收消息......");
@@ -261,7 +264,7 @@ public class Server {
 					switch (buffRecv[0]) {
 					
 					case 0x06:
-						printInformation(1, "上位机客户端：消息类型，上位机发送modbus命令给server服务器程序！");
+						printInformation(1, "上位机客户端：消息类型0x06，上位机发送modbus命令给server服务器程序！");
 						/*
 						this.buffOutputStream.write(buffRecv[0]);// ---------------------------------------------------------------------write
 						this.buffOutputStream.flush();
@@ -294,7 +297,7 @@ public class Server {
 						break;
 						
 					case 0x08:
-						printInformation(1, "上位机客户端：消息类型，向server服务器请求设备状态数据！");
+						printInformation(1, "上位机客户端：消息类型0x08，server服务器向上位机发送设备状态数据！");
 						/** 上位机向server服务器请求设备状态树 */
 						/**
 						 * 1.返回的数据内容 1.第一位是消息类型：08
@@ -339,7 +342,7 @@ public class Server {
 						break;
 						
 					case 0x0B:
-						printInformation(1, "上位机客户端：消息类型，向server服务器请求实时modbusdata监测数据！");
+						printInformation(1, "上位机客户端：消息类型0x0B，server服务器向尚未届发送实时modbusdata监测数据！");
 						
 						/* 从数据库中取最新的一条数据 ，并发送给上位机客户端*/
 /*						
@@ -364,7 +367,7 @@ public class Server {
 						break;
 						
 					case 0x0D:
-						printInformation(1, "上位机客户端：消息类型，向server服务器请求当前设备状态First！");
+						printInformation(1, "上位机客户端：消息类型0x0D，向server服务器请求当前设备状态First！");
 						/** 上位机向server服务器请求设备状态树 */
 						/**
 						 * 1.返回的数据内容 1.第一位是消息类型：08
@@ -376,7 +379,7 @@ public class Server {
 						 * 注意：IP地址存的不是16进制数，与string之间的转换不用使用工具类
 						 * */
 						
-						String strStateData = new String(new byte[] { 0x08 });; 
+						String strStateData = new String(new byte[] { 0x0D });; 
 
 						int countModbusMsg = sqlitecrud.getTableCount("CurrentState");
 						if (countModbusMsg > 0) { // 判断数据库里是否有数据
@@ -404,6 +407,51 @@ public class Server {
 						// 发送数据
 						byte[] byteStateData = strStateData.getBytes();
 						sendMsg(this.buffOutputStream, byteStateData, byteStateData.length);// ---------------------------------------------------------------------write
+						break;
+						
+					case 0x0E:
+						printInformation(1, "上位机客户端：消息类型0x0E，Server发送了一条modbus命令给上位机！");
+						break;
+						
+					case 0x0F:
+						printInformation(1, "上位机客户端：消息类型0x0F:上位机添加modbus命令");
+						
+						// 1.解析接收到的数据
+						String strInsertModbusOrder = new String(buffRecv).substring(1, 17); // 直接将字节数组按照ascll码的方式转换成string类型
+						printInformation(1, "上位机客户端：上位机添加modbus命令:"+strInsertModbusOrder);
+						
+						// 2.查询数据库中是否已经存在这条modbus命令
+						if (sqlitecrud.getTableCount("ModbusMsg", "modbusMsg", strInsertModbusOrder) > 0) {
+							printInformation(1, "上位机客户端：数据库中已经存在这条modbus命令。");
+						} else {
+							
+							// 3.向数据库中添加一条modbus命令
+							String[] strArrayInsertModbusOrder = new String[1];
+							strArrayInsertModbusOrder[0] = strInsertModbusOrder;
+							sqlitecrud.insert("ModbusMsg", strArrayInsertModbusOrder);
+							printInformation(1, "上位机客户端：添加一条新的modbus命令。");
+						}
+						
+						// 4.将消息类型0x0F返回给上位机，（消息从哪里来，就到哪里结束）
+						byte[] buff0F = new byte[] { 0x0F };
+						sendMsg(buffOutputStream, buff0F, 1);//---------------------------------------------------------------------write
+						
+						break;
+						
+					case 0x10:
+						printInformation(1, "上位机客户端：消息类型0x10:上位机删除modbus命令");
+						
+						// 1.解析接收到的数据
+						String strDeleteModbusOrder = new String(buffRecv).substring(1, 17); // 直接将字节数组按照ascll码的方式转换成string类型
+						printInformation(1, "上位机客户端：上位机删除modbus命令:"+strDeleteModbusOrder);
+						
+						// 2.从数据库中删除该条命令
+						sqlitecrud.delete("ModbusMsg", "modbusMsg", strDeleteModbusOrder);
+						
+						// 4.将消息类型0x0F返回给上位机，（消息从哪里来，就到哪里结束）
+						byte[] buff10 = new byte[] { 0x10 };
+						sendMsg(buffOutputStream, buff10, 1);//---------------------------------------------------------------------write
+						
 						break;
 						
 					default:
@@ -506,7 +554,7 @@ public class Server {
 			/**
 			 * 启动发送数据给modbus终端的线程，用于发送modbus命令给modbus终端
 			 * */
-			modbusMsgThread modbusThread = new modbusMsgThread();
+			SendModbusMsgToTreminalThread modbusThread = new SendModbusMsgToTreminalThread();
 			modbusThread.start();
 			printInformation(1, "modbus终端客户端：开始进入modbus终端客户端线程,此线程执行一次后机会结束");
 
@@ -774,11 +822,11 @@ public class Server {
 	 * 1.消息类型：0x09，获取系统时间->发送给modbus终端
 	 * 2.消息类型：0x07，获取modbusorder->发送给modbus终端
 	 * */
-	class modbusMsgThread extends Thread {
+	class SendModbusMsgToTreminalThread extends Thread {
 
 		//public boolean modbusMsgStarted = true;
 
-		public modbusMsgThread() {
+		public SendModbusMsgToTreminalThread() {
 			super();
 		}
 
@@ -861,10 +909,10 @@ public class Server {
 	 * 1.消息类型：0x0E，
 	 * 2.消息格式：0x0E+modbus命令，从数据库中取出，依次发送
 	 * */
-	class sendModbusOrderToHostThread extends Thread {
+	class SendModbusOrderToHostThread extends Thread {
 		private BufferedOutputStream buff;
 		
-		public sendModbusOrderToHostThread(BufferedOutputStream buffOutputStream) {
+		public SendModbusOrderToHostThread(BufferedOutputStream buffOutputStream) {
 			super();
 			buff = buffOutputStream;
 		}
@@ -880,10 +928,11 @@ public class Server {
 					for (int i = 0; i < objModbusMsg.length; i++) {
 
 						// 3.组装0x0E类型的消息
-						byte[] buffsend = ByteUtil.hexStringToBytes("0E" + objModbusMsg[i][0].toString());
+						String strModbusOrder = new String(new byte[] {0x0E}) + objModbusMsg[i][0].toString(); 
+						byte[] buffsend = strModbusOrder.getBytes();
 
 						// 4.发送消息给上位机
-						sendMsg(buff, buffsend, buffsend.length);
+						sendMsg(buff, buffsend, buffsend.length);// ---------------------------------------------------------------------write
 					}
 				}
 			} catch (IOException e) {
