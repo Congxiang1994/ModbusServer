@@ -852,6 +852,45 @@ public class Server {
 			}
 		}
 	}
+	
+	/**向上位机发送modbus命令 辅助线程-------------------------------------------------------------------- */
+	/** ----------------------------------------------------------------------------------------------------------------- */
+	/**
+	 * @author CongXiang 
+	 * 功能：
+	 * 1.消息类型：0x0E，
+	 * 2.消息格式：0x0E+modbus命令，从数据库中取出，依次发送
+	 * */
+	class sendModbusOrderToHostThread extends Thread {
+		private BufferedOutputStream buff;
+		
+		public sendModbusOrderToHostThread(BufferedOutputStream buffOutputStream) {
+			super();
+			buff = buffOutputStream;
+		}
+		
+		public void run() {
+			try {
+				// 1.从数据库中将modbus命令取出
+				int countModbusMsg = sqlitecrud.getTableCount("ModbusMsg");
+				if (countModbusMsg > 0) { // 数据库中有数据
+					Object[][] objModbusMsg = sqlitecrud.selectObject("ModbusMsg");// 从数据库中将modbus命令从数据库中取出来
+
+					// 2.建立一个for循环，依次发送modbus命令
+					for (int i = 0; i < objModbusMsg.length; i++) {
+
+						// 3.组装0x0E类型的消息
+						byte[] buffsend = ByteUtil.hexStringToBytes("0E" + objModbusMsg[i][0].toString());
+
+						// 4.发送消息给上位机
+						sendMsg(buff, buffsend, buffsend.length);
+					}
+				}
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+		}
+	}
 
 	/**
 	 * ---向上位机更新设备状态信息
