@@ -621,7 +621,7 @@ public class Server {
 					switch (buffRecv[0]) {
 					
 					case 0x02:
-						printInformation(1, "modbus终端客户端：消息类型，下位设备上线！");
+						printInformation(1, "modbus终端客户端：消息类型：0x02，下位设备上线！");
 
 						/* 处理下位设备上线  */ 
 						String strDeviceOn = ByteUtil.bytesToHexString(buffRecv).substring(2, 4); // 下位设备ID
@@ -662,7 +662,7 @@ public class Server {
 						break;
 						
 					case 0x03:
-						printInformation(1, "modbus终端客户端：消息类型，下位设备下线！");
+						printInformation(1, "modbus终端客户端：消息类型：0x03，下位设备下线！");
 
 						/* 处理下位设备下线 */
 						String strDeviceOff = ByteUtil.bytesToHexString(buffRecv).substring(2,4);
@@ -706,7 +706,7 @@ public class Server {
 						break;
 						
 					case 0x04:
-						printInformation(1, "modbus终端客户端：消息类型，打开串口成功！");
+						printInformation(1, "modbus终端客户端：消息类型：0x04，打开串口成功！");
 						/*
 						this.buffOutputStream.write(buffRecv);// ---------------------------------------------------------------------write
 						this.buffOutputStream.flush();
@@ -715,7 +715,7 @@ public class Server {
 						break;
 						
 					case 0x05:
-						printInformation(1, "modbus终端客户端：消息类型，打开串口失败！");
+						printInformation(1, "modbus终端客户端：消息类型：0x05，打开串口失败！");
 						/*
 						this.buffOutputStream.write(buffRecv);// ---------------------------------------------------------------------write
 						this.buffOutputStream.flush();
@@ -724,15 +724,15 @@ public class Server {
 						break;
 						
 					case 0x07:
-						printInformation(1, "modbus终端客户端：消息类型，收到modbus命令0x07");
+						printInformation(1, "modbus终端客户端：消息类型：0x07，收到Server发送的modbus命令，modbus终端刚上线");
 						break;
 						
 					case 0x09:
-						printInformation(1, "modbus终端客户端：消息类型，收到modbus命令0x09");
+						printInformation(1, "modbus终端客户端：消息类型：0x09，收到Server程序发送的系统时间");
 						break;
 						
 					case 0x0A:
-						printInformation(1, "modbus终端客户端：消息类型，收到modbus命令0x0A");
+						printInformation(1, "modbus终端客户端：消息类型：0x0A，modbus终端发送监测数据给server服务器");
 						sendMsg(this.buffOutputStream, buffRecv,1);
 						
 						/**---解析从modbus终端发送过来的消息
@@ -740,13 +740,17 @@ public class Server {
 						 * 消息长度：时间(19个字节)；modbusdata(剩余全是)
 						 * */
 						// 1.将byte[]转换成string
-						String strRecvMsg = new String(buffRecv); // 直接将字节数组按照ascll码的方式转换成string类型
+						String strRecvMsg = new String(buffRecv,0,numRecv); // 直接将字节数组按照ascll码的方式转换成string类型
 						
 						// 2.截取时间
 						String strTime = strRecvMsg.substring(1, 20); // 第一位是功能码，后面的19位是时间2016-04-06 12:12:12
 						
+						//01031400010000000000000000000100000000000000003F
+						//0103140001000000000000000000010000000000000000930b
+						
 						// 3.截取modbusdata，这里需要转换：string->byte[]->string(16进制格式),!!!这里numRecv-1：因为要减去自己定义的功能码
-						String strModbusData = ByteUtil.bytesToHexString(strRecvMsg.substring(20, numRecv-1).getBytes()).toUpperCase();
+						//String strModbusData = ByteUtil.bytesToHexString(strRecvMsg.substring(20, numRecv-1).getBytes()).toUpperCase();
+						String strModbusData = ByteUtil.bytesToHexString(buffRecv).substring(20*2, numRecv*2).toUpperCase();
 						printInformation(1, "modbus终端客户端：消息类型，收到modbus命令0x0A，时间："+strTime+"、数据："+strModbusData);
 						
 						// 4.将监测数据存放进数据库
