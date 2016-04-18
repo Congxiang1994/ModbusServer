@@ -342,7 +342,7 @@ public class Server {
 						break;
 						
 					case 0x0B:
-						printInformation(1, "上位机客户端：消息类型0x0B，server服务器向尚未届发送实时modbusdata监测数据！");
+						printInformation(1, "上位机客户端：消息类型0x0B，server服务器向上位机发送实时modbusdata监测数据！");
 						
 						/* 从数据库中取最新的一条数据 ，并发送给上位机客户端*/
 /*						
@@ -430,12 +430,24 @@ public class Server {
 							strArrayInsertModbusOrder[0] = strInsertModbusOrder;
 							sqlitecrud.insert("ModbusMsg", strArrayInsertModbusOrder);
 							printInformation(1, "上位机客户端：添加一条新的modbus命令。");
+							
+							
+							/* --->>>将添加modbus命令的消息发送给modbus终端，消息格式：0x11+modbus命令 */
+							// 1.判断上线的modbus终端数量是否大于0,建立for循环，
+							for (int i = 0; i < modbusClientList.size(); i++) {
+								// 2.组装消息：0x11+modbus命令
+								byte[] buffsend = ByteUtil.hexStringToBytes("11" + strInsertModbusOrder);
+								printInformation(1, "上位机客户端：Server服务器将modbus命令转发给modbus终端："+strInsertModbusOrder);
+								// 3.发送消息给modbus终端
+								sendMsg(modbusClientList.get(i).buffOutputStream, buffsend, buffsend.length);
+							}
+							/* -------------------------------------------------------------------- */
 						}
 						
 						// 4.将消息类型0x0F返回给上位机，（消息从哪里来，就到哪里结束）
 						byte[] buff0F = new byte[] { 0x0F };
 						sendMsg(buffOutputStream, buff0F, 1);//---------------------------------------------------------------------write
-						
+
 						break;
 						
 					case 0x10:
@@ -448,10 +460,21 @@ public class Server {
 						// 2.从数据库中删除该条命令
 						sqlitecrud.delete("ModbusMsg", "modbusMsg", strDeleteModbusOrder);
 						
-						// 4.将消息类型0x0F返回给上位机，（消息从哪里来，就到哪里结束）
+						/* --->>>将删除modbus命令的消息发送给modbus终端，消息格式：0x12+modbus命令 */
+						// 1.判断上线的modbus终端数量是否大于0,建立for循环，
+						for (int i = 0; i < modbusClientList.size(); i++) {
+							// 2.组装消息：0x11+modbus命令
+							byte[] buffsend = ByteUtil.hexStringToBytes("12" + strDeleteModbusOrder);
+							printInformation(1, "上位机客户端：Server服务器通知modbus终端删除该命令："+strDeleteModbusOrder);
+							// 3.发送消息给modbus终端
+							sendMsg(modbusClientList.get(i).buffOutputStream, buffsend, buffsend.length);
+						}
+						/* -------------------------------------------------------------------- */
+						
+						// 3.将消息类型0x0F返回给上位机，（消息从哪里来，就到哪里结束）
 						byte[] buff10 = new byte[] { 0x10 };
 						sendMsg(buffOutputStream, buff10, 1);//---------------------------------------------------------------------write
-						
+
 						break;
 						
 					default:
@@ -554,7 +577,7 @@ public class Server {
 			/**
 			 * 启动发送数据给modbus终端的线程，用于发送modbus命令给modbus终端
 			 * */
-			SendModbusMsgToTreminalThread modbusThread = new SendModbusMsgToTreminalThread();
+			SendModbusMsgToTreminalThread modbusThread = new SendModbusMsgToTreminalThread(buffOutputStream);
 			modbusThread.start();
 			printInformation(1, "modbus终端客户端：开始进入modbus终端客户端线程,此线程执行一次后机会结束");
 
@@ -751,6 +774,14 @@ public class Server {
 						}
 						break;
 						
+					case 0x11:
+						printInformation(1, "消息类型：0x11:Server服务器程序添加modbus命令成功。");
+						break;
+						
+					case 0x12:
+						printInformation(1, "消息类型：0x12:Server服务器程序删除modbus命令成功。");
+						break;
+						
 					default:
 						break;
 					}
@@ -825,74 +856,48 @@ public class Server {
 	class SendModbusMsgToTreminalThread extends Thread {
 
 		//public boolean modbusMsgStarted = true;
-
-		public SendModbusMsgToTreminalThread() {
+		private BufferedOutputStream buff;
+		
+		public SendModbusMsgToTreminalThread(BufferedOutputStream buffOutputStream) {
 			super();
+			buff= buffOutputStream;
 		}
 
-		/**
-		 * >>>存在的问题：
-		 * 1.当数据库中有多条modbus命令的时候，将modbus命令一起发送给客户端，
-		 * 2.考虑一下，modbus终端接收数据的时候，如果接收的字符串缓冲区不够大，怎么办？如何分多次接收长数据
-		 * */
 		@Override
 		public void run() {
 			try {
-				
+
 				Thread.sleep(1000);
-				
-				/* 获取系统时间，并将系统时间发送给modbus终端  */
+
+				/* 获取系统时间，并将系统时间发送给modbus终端 */
 				// 1.获取系统时间
 				SimpleDateFormat df = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");// 设置日期格式
 				String strCurrentSystemTime = df.format(new Date()).toString();
-				
 				// 2.组合消息0x09
-				strCurrentSystemTime = new String(new byte[] {0x09}) + strCurrentSystemTime; // 前面加上消息类型0x09
+				strCurrentSystemTime = new String(new byte[] { 0x09 }) + strCurrentSystemTime; // 前面加上消息类型0x09
 				byte[] buffTimeSend = strCurrentSystemTime.getBytes();
-
 				// 3.将消息发送给modbus终端
-				for (int m = 0; m < modbusClientList.size(); m++) {
-					/*
-					modbusClientList.get(m).buffOutputStream.write(buffTimeSend);// ---------------------------------------------------------------------write
-					modbusClientList.get(m).buffOutputStream.flush();
-					*/
-					sendMsg(modbusClientList.get(m).buffOutputStream, buffTimeSend, buffTimeSend.length);
-				}
-				//-------------------------
-				
+				sendMsg(buff, buffTimeSend, buffTimeSend.length);
+
+				// -------------------------
+
 				/* 获取modbusorder，并将modbusorder发送给modbus终端 */
 				// 1.判断在线终端不为空
-				if (modbusClientList.size() > 0) { // 当modbusClientList不为空的时候，在进行发送modbus命令，节省资源
-					
-					printInformation(1, "//---辅助线程:进入循环[用于将modbus消息发送给modbus终端]...");
-					
-					int countModbusMsg = sqlitecrud.getTableCount("ModbusMsg");
-					// 2.判断数据库中有modbusorder
-					if (countModbusMsg > 0 && modbusClientList.size() > 0) { // 数据库中有数据，这是就需要将数据发送给modbus终端
-						
-						printInformation(0, "//---辅助线程:数据库中有数据");
-						
-						// 3.从数据库中获取modbusorder
-						Object[][] objModbusMsg = sqlitecrud.selectObject("ModbusMsg");// 从数据库中将modbus命令从数据库中取出来
-						
-						// 4.遍历所有现在的modbus终端
-						for (int j = 0; j < modbusClientList.size(); j++) {
-							// 5.遍历所有的modbusorder
-							for (int i = 0; i < objModbusMsg.length; i++) {
-								// 6.组装0x07类型的消息
-								byte[] buffsend = ByteUtil.hexStringToBytes("07" + objModbusMsg[i][0].toString());
-								printInformation(1, "//---辅助线程:终于发送数据" + objModbusMsg[i][0].toString());
-								
-								/*
-								modbusClientList.get(j).buffOutputStream.write(buffsend);// ---------------------------------------------------------------------write
-								modbusClientList.get(j).buffOutputStream.flush();
-								*/
-								// 7.将0x07类型的消息发送给modbus终端
-								sendMsg(modbusClientList.get(j).buffOutputStream, buffsend, buffsend.length);
-								
-								Thread.sleep(1000);
-							}
-						}
+				printInformation(1, "//---辅助线程:进入循环[用于将modbus消息发送给modbus终端]...");
+				int countModbusMsg = sqlitecrud.getTableCount("ModbusMsg");
+				// 2.判断数据库中有modbusorder
+				if (countModbusMsg > 0) { // 数据库中有数据，这是就需要将数据发送给modbus终端,
+					printInformation(0, "//---辅助线程:数据库中有数据");
+					// 3.从数据库中获取modbusorder
+					Object[][] objModbusMsg = sqlitecrud.selectObject("ModbusMsg");// 从数据库中将modbus命令从数据库中取出来
+					// 4.遍历所有的modbusorder
+					for (int i = 0; i < objModbusMsg.length; i++) {
+						// 5.组装0x07类型的消息
+						byte[] buffsend = ByteUtil.hexStringToBytes("07" + objModbusMsg[i][0].toString());
+						printInformation(1, "//---辅助线程:终于发送数据" + objModbusMsg[i][0].toString());
+						// 6.将0x07类型的消息发送给modbus终端
+						sendMsg(buff, buffsend, buffsend.length);
+						Thread.sleep(1000);
 					}
 				}
 			} catch (InterruptedException | IOException e) {
@@ -983,7 +988,7 @@ public class Server {
 				strStateData = strStateData + lengthOfTerminalName + strTerminalName + strDeviceName;
 			}
 		}
-		printInformation(1, "上位机客户端：发送给上位机的状态数据为：" + strStateData);
+		printInformation(1, "【方法】发送给上位机的状态数据为：" + strStateData);
 
 		// 发送数据
 		byte[] byteStateData = strStateData.getBytes();
@@ -1007,7 +1012,7 @@ public class Server {
 			strModbusSingleStateData = strModbusSingleStateData + objModbusData[3]; // 是否在线的状态
 		}
 */
-		printInformation(1, "上位机客户端：发送给上位机的实时设备状态信息为：" + strModbusSingleStateData);
+		printInformation(1, "【方法】发送给上位机的实时设备状态信息为：" + strModbusSingleStateData);
 		
 		// 3.将单条modbusdata实时设备状态消息发送给上位机
 		byte[] byteModbusSingleStateData = (new String(new byte[] { 0x0C }) + strModbusSingleStateData).getBytes();
