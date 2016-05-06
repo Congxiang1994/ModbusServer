@@ -762,7 +762,7 @@ public class Server {
 						sqlitecrud.insert("MonitorData", strValuesOfMonitorData);
 						
 						// 5.将监测数据实时发送给上位机，格式：功能码 + 时间 + 地址长度 + modbus终端的IP地址 + 下位设备ID + modbusdata
-						String strModbusDataToHost = new String(new byte[] {0x0B}) ; // 消息类型码0x08
+						String strModbusDataToHost = new String(new byte[] {0x0B}) ; // 消息类型码0x0B
 						strModbusDataToHost = strModbusDataToHost + strValuesOfMonitorData[0];
 						strModbusDataToHost = strModbusDataToHost + ByteUtil.intToString(strValuesOfMonitorData[1].length()); // IP地址的长度
 						strModbusDataToHost = strModbusDataToHost + strValuesOfMonitorData[1];
@@ -1128,6 +1128,7 @@ public class Server {
 	 * 2.String strMsg; // 消息内容
 	 * */
 	public void printInformation(int systemOrApplication, String strMsg) {
+/*		
 		if (systemOrApplication == 0) { // 不输出
 
 		} else if (systemOrApplication == 1) { // 系统输出
@@ -1139,6 +1140,27 @@ public class Server {
 			System.err.println(strMsg);
 		} else {
 			System.out.println("输出方式出错：请检查输出方式，-1是出错消息输出，0是系统输出，1是界面输出");
+		}
+*/
+		switch(systemOrApplication){
+		case 0: // 不输出
+			break;
+			
+		case 1:// 系统输出
+			System.out.println(strMsg.trim());
+			break;
+			
+		case 2:// 程序界面输出
+			tainfo.append(strMsg + "\n");
+			tainfo.selectAll();
+			break;
+			
+		case -1:// 出错消息输出
+			System.err.println(strMsg);
+			break;
+		default:
+			System.out.println("输出方式出错：请检查输出方式，-1是出错消息输出，1是系统输出，2是界面输出");
+			break;
 		}
 	}
 
