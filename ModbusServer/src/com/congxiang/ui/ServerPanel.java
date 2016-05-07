@@ -64,6 +64,9 @@ public class ServerPanel extends JPanel {
 		gridbaglayout.setConstraints(jsp, new GBC(0,1,4,6).setWeight(1, 1).setFill(GBC.BOTH).setInsets(5, 5, 5, 5));
 		this.add(jsp);
 		
+		// 设置按钮的初始化状态
+		btOpenServer.setEnabled(true);
+		btCloseServer.setEnabled(false);
 		tfPort.setText("8000");
 
 	}

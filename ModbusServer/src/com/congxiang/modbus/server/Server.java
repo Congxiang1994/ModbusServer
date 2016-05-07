@@ -46,6 +46,9 @@ public class Server implements ActionListener {
 	// 数据库相关
 	Connection conn;
 	SQLiteCRUD sqlitecrud; // 工具类的对象
+	
+	// 主线程
+	MainThread mainThread = null;
 
 	// 构造方法，主要是绘制界面上的控件，以及设置监听器
 	Server() throws Exception {
@@ -116,23 +119,18 @@ public class Server implements ActionListener {
 		/** -------------------------------------------------------------------------------------------------------------- */
 
 	}
-	/**向modbus终端发送modbus命令/系统时间等消息 辅助线程-------------------------------------------------------------------- */
 	/** ----------------------------------------------------------------------------------------------------------------- */
-	/**
+	/** 主线程
 	 * @author CongXiang 
-	 * 功能：
-	 * 1.消息类型：0x09，获取系统时间->发送给modbus终端
-	 * 2.消息类型：0x07，获取modbusorder->发送给modbus终端
+	 * 功能：用于接收上位机、modbus终端的连接请求
 	 * */
 	class MainThread extends Thread {
-
+		private ServerSocket serverSocket = null; // 服务器端的套接字
+		private Socket socketClient = null; // 连接套接字
 		@Override
 		public void run() {
 			/** 主要进程:主要用来接收上位机和modbus终端的连接请求 -----------------------------------------------------------------*/
 			printInformation(1, "\n" + "主线程即将开始运行......");
-
-			ServerSocket serverSocket = null; // 服务器端的套接字
-			Socket socketClient = null; // 连接套接字
 
 			try {
 				serverSocket = new ServerSocket(Integer.valueOf(serverPanel.tfPort.getText().trim())); // 创建套接字
@@ -211,7 +209,7 @@ public class Server implements ActionListener {
 					printInformation(-1, "主线程:警告，接收客户端连接请求失败！");
 					try {
 						serverSocket.close();
-						socketClient.close();
+						// socketClient.close();
 					} catch (IOException e1) {
 					}
 					connectionStarted = false;
@@ -222,9 +220,10 @@ public class Server implements ActionListener {
 				}
 			}
 			/** -------------------------------------------------------------------------------------------------------------- */
-			printInformation(1, "主线程:主线程结束！！！");
+			printInformation(-1, "主线程:主线程结束！！！");
 
 		}
+		
 	}
 	/**上位机客户端 辅助线程------------------------------------------------------------------------------------------------ */
 	/** ------------------------------------------------------------------------------------------------------------------ */
@@ -1140,19 +1139,39 @@ public class Server implements ActionListener {
 	// server面板上的消息相应事件
 	@Override
 	public void actionPerformed(ActionEvent e) {
-		if(e.getSource() == serverPanel.btOpenServer){ /*--- 打开服务器*/
+
+		if (e.getSource() == serverPanel.btOpenServer) { /*--- 打开服务器*/
+			serverPanel.btOpenServer.setEnabled(false);
+			serverPanel.btCloseServer.setEnabled(true);
 			// ---------------------------------- 启动主线程
-			MainThread mainThread = new MainThread();
+			mainThread = new MainThread();
 			mainThread.start();
-			
-		}else if(e.getSource() == serverPanel.btCloseServer){ /*--- 关闭服务器*/
+
+		} else if (e.getSource() == serverPanel.btCloseServer) { /*--- 关闭服务器*/
+			serverPanel.btOpenServer.setEnabled(true);
+			serverPanel.btCloseServer.setEnabled(false);
 			/* 如何正确关闭所有线程以及其他代码 */
-			
-			// 1.关闭主线程，同时关闭套接字、输入输出流
-			
-			// 2.关闭客户端线程，同时关闭套接字、输入输出流
+
+			try {
+				// 1.关闭主线程，同时关闭套接字、输入输出流
+				mainThread.serverSocket.close();
+				mainThread.interrupt();
+
+				// 2.关闭Modbus终端客户端线程
+				for (int i = 0; i < modbusClientList.size(); i++) {
+					modbusClientList.get(i).socket.close();
+				}
+				
+				// 3.关闭上位机客户端线程
+				for (int i = 0; i < hostClientList.size(); i++) {
+					hostClientList.get(i).socket.close();
+				}
+				
+			} catch (IOException e1) {
+				// TODO Auto-generated catch block
+				e1.printStackTrace();
+			}
 		}
-		
 	}
 	/**
 	 * ---打印服务器程序的状态
