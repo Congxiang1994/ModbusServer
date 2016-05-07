@@ -1,6 +1,8 @@
 package com.congxiang.modbus.server;
 
 import java.awt.Container;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.io.BufferedInputStream;
@@ -25,13 +27,17 @@ import javax.swing.JTextArea;
 import com.congxiang.modbus.dao.SQLiteCRUD;
 import com.congxiang.modbus.dao.SQLiteConn;
 import com.congxiang.modbus.util.ByteUtil;
+import com.congxiang.ui.ServerPanel;
 
-public class Server {
+public class Server implements ActionListener {
 
 	List<ModbusClient> modbusClientList = new ArrayList<ModbusClient>(); // 保存modbus终端对象
 	List<HostClient> hostClientList = new ArrayList<HostClient>(); // 保存modbus终端对象
 
 	boolean connectionStarted; // 标识量，当程序终止的时候，置为false，可以终止主线程
+	
+	// 面板对象
+	public ServerPanel serverPanel = new ServerPanel();
 
 	// 界面控件
 	JTextArea tainfo = new JTextArea(); // 　文本框
@@ -77,9 +83,14 @@ public class Server {
 		/** 显示窗口设计：主要一个文本框，用来实时显示程序运行状态------------------------------------------------------------ */
 		JFrame frame = new JFrame();
 		Container mainContainer = frame.getContentPane();
-		mainContainer.add(jsp);
+		mainContainer.add(serverPanel);
 		frame.setTitle("modbus服务器程序");
-		frame.setSize(300, 200); // 设置界面大小
+		
+		/* 为面板上的按钮添加消息相应事件 */
+		serverPanel.btOpenServer.addActionListener(this);
+		serverPanel.btCloseServer.addActionListener(this);
+		
+		frame.setSize(500, 350); // 设置界面大小
 		// this.setLocationRelativeTo(null); // 设置界面在屏幕中央显示
 		frame.setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE); // 设置单击关闭按钮能够关闭主进程，--------------------------------这里将来要改一下，不能直接关闭，因为这个程序充当服务器小程序
 		frame.addWindowListener(new WindowAdapter() {
@@ -103,110 +114,118 @@ public class Server {
 		});
 		frame.setVisible(true); // 显示窗口
 		/** -------------------------------------------------------------------------------------------------------------- */
-/*
-		// 启动发送modbus命令的辅助线程
-		// ---------------------------------- 先关闭辅助线程
-		modbusMsgThread modbusThread = new modbusMsgThread();
-		modbusThread.start();
-*/
-		/** 主要进程:主要用来接收上位机和modbus终端的连接请求 -----------------------------------------------------------------*/
-		this.printInformation(1, "\n" + "主线程即将开始运行......");
 
-		ServerSocket serverSocket = null; // 服务器端的套接字
-		Socket socketClient = null; // 连接套接字
+	}
+	/**向modbus终端发送modbus命令/系统时间等消息 辅助线程-------------------------------------------------------------------- */
+	/** ----------------------------------------------------------------------------------------------------------------- */
+	/**
+	 * @author CongXiang 
+	 * 功能：
+	 * 1.消息类型：0x09，获取系统时间->发送给modbus终端
+	 * 2.消息类型：0x07，获取modbusorder->发送给modbus终端
+	 * */
+	class MainThread extends Thread {
 
-		try {
-			serverSocket = new ServerSocket(8000); // 创建套接字
-		} catch (IOException e) {
-			e.printStackTrace();
-			this.printInformation(1, "主线程:创建服务器端套接字失败！");
-		}
+		@Override
+		public void run() {
+			/** 主要进程:主要用来接收上位机和modbus终端的连接请求 -----------------------------------------------------------------*/
+			printInformation(1, "\n" + "主线程即将开始运行......");
 
-		this.printInformation(1, "主线程:服务器套接字创建成功，下一步等待接收客户端的请求连接...");
+			ServerSocket serverSocket = null; // 服务器端的套接字
+			Socket socketClient = null; // 连接套接字
 
-		connectionStarted = true;
-
-		while (connectionStarted == true) {// 主线程主要是一个死循环，主要接收modbus终端的请求
-			this.printInformation(1, "\n" + "主线程：进入循环,等待新的请求连接...");
 			try {
-				socketClient = serverSocket.accept(); // 接收客户端请求
-				this.printInformation(1, "主线程:有客户端请求连接，下一步判断是上位机还是modbus终端");
+				serverSocket = new ServerSocket(Integer.valueOf(serverPanel.tfPort.getText().trim())); // 创建套接字
+			} catch (IOException e) {
+				e.printStackTrace();
+				printInformation(1, "主线程:创建服务器端套接字失败！");
+			}
 
-				// 判断客户端是上位机还是modbus终端,这里通过接收的第一个字符来判断
-				InputStream inputStream = socketClient.getInputStream();
-				OutputStream outputStream = socketClient.getOutputStream();
+			printInformation(1, "主线程:服务器套接字创建成功，下一步等待接收客户端的请求连接...");
 
-				BufferedInputStream bufferInputStream = new BufferedInputStream(inputStream);
-				BufferedOutputStream buffOutputStream = new BufferedOutputStream(outputStream);
-				byte[] bufferID = new byte[1];
-				
-				/*
-				int num = bufferInputStream.read(bufferID);// ---------------------------------------------------------------------read
-				*/
-				int num  = recvMsg(bufferInputStream, bufferID);
-				if (num < 0) {
-					connectionStarted = false; // 如果接收出错，则终止主线程
-					printInformation(-1, "主线程:警告，接收字符出错！");
+			connectionStarted = true;
+
+			while (connectionStarted == true) {// 主线程主要是一个死循环，主要接收modbus终端的请求
+				printInformation(1, "\n" + "主线程：进入循环,等待新的请求连接...");
+				try {
+					socketClient = serverSocket.accept(); // 接收客户端请求
+					printInformation(1, "主线程:有客户端请求连接，下一步判断是上位机还是modbus终端");
+
+					// 判断客户端是上位机还是modbus终端,这里通过接收的第一个字符来判断
+					InputStream inputStream = socketClient.getInputStream();
+					OutputStream outputStream = socketClient.getOutputStream();
+
+					BufferedInputStream bufferInputStream = new BufferedInputStream(inputStream);
+					BufferedOutputStream buffOutputStream = new BufferedOutputStream(outputStream);
+					byte[] bufferID = new byte[1];
+					
+					/*
+					int num = bufferInputStream.read(bufferID);// ---------------------------------------------------------------------read
+					*/
+					int num  = recvMsg(bufferInputStream, bufferID);
+					if (num < 0) {
+						connectionStarted = false; // 如果接收出错，则终止主线程
+						printInformation(-1, "主线程:警告，接收字符出错！");
+						break;
+					}
+
+					printInformation(1, "主线程:接收的字符的数量为：" + num + ";接收的字符串为：" + bufferID[0]);
+					printInformation(1, "主线程:成功将接收的字符串返回给请求连接的客户端");
+
+					// 判断是哪种类型的客户端上线
+					if (bufferID[0] == 0x00) {
+						/*
+						buffOutputStream.write(bufferID);// ---------------------------------------------------------------------write
+						buffOutputStream.flush();
+						*/
+						sendMsg(buffOutputStream, bufferID,1);
+						/** ------上位机请求 */
+						printInformation(1, "主线程:是上位机请求连接");
+						HostClient hostClient = new HostClient(socketClient, inputStream, outputStream); // 新建一个上位机对象
+						hostClientList.add(hostClient); // 将上位机对象添加到List集合中
+						printInformation(1, "主线程:将上位机线程添加到线程类集合中");
+						new Thread(hostClient).start(); // 启动上位机的线程
+						printInformation(1, "主线程:启动上位机线程成功");
+
+					} else if (bufferID[0] == 0x01) {
+						/*
+						buffOutputStream.write(bufferID);// ---------------------------------------------------------------------write
+						buffOutputStream.flush();
+						*/
+						sendMsg(buffOutputStream, bufferID,1);
+						/** ------modbus终端请求 */
+						printInformation(1, "主线程:是modbus终端请求连接");
+						ModbusClient modbusClient = new ModbusClient(socketClient, inputStream, outputStream); // 新建一个modbus终端对象
+						modbusClientList.add(modbusClient); // 将modbus对象添加到List集合中
+						new Thread(modbusClient).start(); // 启动modbus终端的线程
+					} else {
+						/** ------出现未知请求源 */
+						socketClient.close();// 关闭此socket连接
+						printInformation(-1, "主线程:警告，出现未知请求源，已自动关闭此连接");
+					}
+
+					// 将不需要的输入输出流关闭
+
+				} catch (IOException e) {
+					// e.printStackTrace();
+					printInformation(-1, "主线程:警告，接收客户端连接请求失败！");
+					try {
+						serverSocket.close();
+						socketClient.close();
+					} catch (IOException e1) {
+					}
+					connectionStarted = false;
+
+					// 关闭其他辅助线程
+					//modbusThread.modbusMsgStarted = false;
 					break;
 				}
-
-				this.printInformation(1, "主线程:接收的字符的数量为：" + num + ";接收的字符串为：" + bufferID[0]);
-				this.printInformation(1, "主线程:成功将接收的字符串返回给请求连接的客户端");
-
-				// 判断是哪种类型的客户端上线
-				if (bufferID[0] == 0x00) {
-					/*
-					buffOutputStream.write(bufferID);// ---------------------------------------------------------------------write
-					buffOutputStream.flush();
-					*/
-					sendMsg(buffOutputStream, bufferID,1);
-					/** ------上位机请求 */
-					this.printInformation(1, "主线程:是上位机请求连接");
-					HostClient hostClient = new HostClient(socketClient, inputStream, outputStream); // 新建一个上位机对象
-					hostClientList.add(hostClient); // 将上位机对象添加到List集合中
-					this.printInformation(1, "主线程:将上位机线程添加到线程类集合中");
-					new Thread(hostClient).start(); // 启动上位机的线程
-					this.printInformation(1, "主线程:启动上位机线程成功");
-
-				} else if (bufferID[0] == 0x01) {
-					/*
-					buffOutputStream.write(bufferID);// ---------------------------------------------------------------------write
-					buffOutputStream.flush();
-					*/
-					sendMsg(buffOutputStream, bufferID,1);
-					/** ------modbus终端请求 */
-					this.printInformation(1, "主线程:是modbus终端请求连接");
-					ModbusClient modbusClient = new ModbusClient(socketClient, inputStream, outputStream); // 新建一个modbus终端对象
-					modbusClientList.add(modbusClient); // 将modbus对象添加到List集合中
-					new Thread(modbusClient).start(); // 启动modbus终端的线程
-				} else {
-					/** ------出现未知请求源 */
-					socketClient.close();// 关闭此socket连接
-					this.printInformation(-1, "主线程:警告，出现未知请求源，已自动关闭此连接");
-				}
-
-				// 将不需要的输入输出流关闭
-
-			} catch (IOException e) {
-				// e.printStackTrace();
-				this.printInformation(-1, "主线程:警告，接收客户端连接请求失败！");
-				try {
-					serverSocket.close();
-					socketClient.close();
-				} catch (IOException e1) {
-				}
-				connectionStarted = false;
-
-				// 关闭其他辅助线程
-				//modbusThread.modbusMsgStarted = false;
-				break;
 			}
-		}
-		/** -------------------------------------------------------------------------------------------------------------- */
-		this.printInformation(1, "主线程:主线程结束！！！");
-		
-	}
+			/** -------------------------------------------------------------------------------------------------------------- */
+			printInformation(1, "主线程:主线程结束！！！");
 
+		}
+	}
 	/**上位机客户端 辅助线程------------------------------------------------------------------------------------------------ */
 	/** ------------------------------------------------------------------------------------------------------------------ */
 	class HostClient implements Runnable {
@@ -1118,7 +1137,23 @@ public class Server {
 
 	}
 
-	
+	// server面板上的消息相应事件
+	@Override
+	public void actionPerformed(ActionEvent e) {
+		if(e.getSource() == serverPanel.btOpenServer){ /*--- 打开服务器*/
+			// ---------------------------------- 启动主线程
+			MainThread mainThread = new MainThread();
+			mainThread.start();
+			
+		}else if(e.getSource() == serverPanel.btCloseServer){ /*--- 关闭服务器*/
+			/* 如何正确关闭所有线程以及其他代码 */
+			
+			// 1.关闭主线程，同时关闭套接字、输入输出流
+			
+			// 2.关闭客户端线程，同时关闭套接字、输入输出流
+		}
+		
+	}
 	/**
 	 * ---打印服务器程序的状态
 	 * @author CongXiang 
@@ -1169,6 +1204,9 @@ public class Server {
 	public static void main(String[] args) throws Exception {
 		new Server();
 	}
+
+
+
 }
 
 
