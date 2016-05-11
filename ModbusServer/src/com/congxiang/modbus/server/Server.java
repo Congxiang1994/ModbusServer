@@ -73,7 +73,7 @@ public class Server implements ActionListener {
 		}
 
 		/** 创建 modbus命令的表 --- 这个根据上位机发送过来的消息实时更新，一方面用于判断下位设备哪些是在线的 */
-		if (sqlitecrud.createTable("create table if not exists ModbusMsg(modbusMsg varchar(50));")) {
+		if (sqlitecrud.createTable("create table if not exists ModbusMsg(modbusMsg varchar(50), terminalName varchar(50));")) {
 			this.printInformation(1, "创建数据库表:表ModbusMsg成功！");
 		}
 
@@ -434,8 +434,9 @@ public class Server implements ActionListener {
 					case 0x0F:
 						printInformation(1, "上位机客户端：消息类型0x0F:上位机添加modbus命令");
 						
+						String strBuffRecv = new String(buffRecv);
 						// 1.解析接收到的数据
-						String strInsertModbusOrder = new String(buffRecv).substring(1, 17); // 直接将字节数组按照ascll码的方式转换成string类型
+						String strInsertModbusOrder = strBuffRecv.substring(1, 17); // 直接将字节数组按照ascll码的方式转换成string类型
 						printInformation(1, "上位机客户端：上位机添加modbus命令:"+strInsertModbusOrder);
 						
 						// 2.查询数据库中是否已经存在这条modbus命令
@@ -444,8 +445,15 @@ public class Server implements ActionListener {
 						} else {
 							
 							// 3.向数据库中添加一条modbus命令
-							String[] strArrayInsertModbusOrder = new String[1];
+							String[] strArrayInsertModbusOrder = new String[2];
 							strArrayInsertModbusOrder[0] = strInsertModbusOrder;
+							
+							// 4.解析modbus终端的IP地址
+							int lengthOfTerminalIP = Integer.valueOf(strBuffRecv.substring(17, 19));
+							
+							strArrayInsertModbusOrder[1] = strBuffRecv.substring(19, 19+lengthOfTerminalIP);
+							System.out.println(strArrayInsertModbusOrder[1]);
+							
 							sqlitecrud.insert("ModbusMsg", strArrayInsertModbusOrder);
 							printInformation(1, "上位机客户端：添加一条新的modbus命令。");
 							
@@ -453,11 +461,13 @@ public class Server implements ActionListener {
 							/* --->>>将添加modbus命令的消息发送给modbus终端，消息格式：0x11+modbus命令 */
 							// 1.判断上线的modbus终端数量是否大于0,建立for循环，
 							for (int i = 0; i < modbusClientList.size(); i++) {
-								// 2.组装消息：0x11+modbus命令
-								byte[] buffsend = ByteUtil.hexStringToBytes("11" + strInsertModbusOrder);
-								printInformation(1, "上位机客户端：Server服务器将modbus命令转发给modbus终端："+strInsertModbusOrder);
-								// 3.发送消息给modbus终端
-								sendMsg(modbusClientList.get(i).buffOutputStream, buffsend, buffsend.length);
+								if (modbusClientList.get(i).addressIp.toString().equals(strArrayInsertModbusOrder[1])) {
+									// 2.组装消息：0x11+modbus命令
+									byte[] buffsend = ByteUtil.hexStringToBytes("11" + strInsertModbusOrder);
+									printInformation(1, "上位机客户端：Server服务器将modbus命令转发给modbus终端：" + strInsertModbusOrder);
+									// 3.发送消息给modbus终端
+									sendMsg(modbusClientList.get(i).buffOutputStream, buffsend, buffsend.length);
+								}
 							}
 							/* -------------------------------------------------------------------- */
 						}
@@ -470,22 +480,25 @@ public class Server implements ActionListener {
 						
 					case 0x10:
 						printInformation(1, "上位机客户端：消息类型0x10:上位机删除modbus命令");
-						
+						String strBuffRecc10 = new String(buffRecv);
 						// 1.解析接收到的数据
-						String strDeleteModbusOrder = new String(buffRecv).substring(1, 17); // 直接将字节数组按照ascll码的方式转换成string类型
+						String strDeleteModbusOrder = strBuffRecc10.substring(1, 17); // 直接将字节数组按照ascll码的方式转换成string类型
 						printInformation(1, "上位机客户端：上位机删除modbus命令:"+strDeleteModbusOrder);
 						
 						// 2.从数据库中删除该条命令
-						sqlitecrud.delete("ModbusMsg", "modbusMsg", strDeleteModbusOrder);
+						String strTerminalIp = strBuffRecc10.substring(19, 19 + Integer.valueOf(strBuffRecc10.substring(17, 19)));
+						sqlitecrud.deleteByTwoKeyValue("ModbusMsg", "modbusMsg", strDeleteModbusOrder,"terminalName",strTerminalIp);
 						
 						/* --->>>将删除modbus命令的消息发送给modbus终端，消息格式：0x12+modbus命令 */
 						// 1.判断上线的modbus终端数量是否大于0,建立for循环，
 						for (int i = 0; i < modbusClientList.size(); i++) {
-							// 2.组装消息：0x11+modbus命令
-							byte[] buffsend = ByteUtil.hexStringToBytes("12" + strDeleteModbusOrder);
-							printInformation(1, "上位机客户端：Server服务器通知modbus终端删除该命令："+strDeleteModbusOrder);
-							// 3.发送消息给modbus终端
-							sendMsg(modbusClientList.get(i).buffOutputStream, buffsend, buffsend.length);
+							if(modbusClientList.get(i).addressIp.toString().equals(strTerminalIp)) {
+								// 2.组装消息：0x12+modbus命令
+								byte[] buffsend = ByteUtil.hexStringToBytes("12" + strDeleteModbusOrder);
+								printInformation(1, "上位机客户端：Server服务器通知modbus终端删除该命令：" + strDeleteModbusOrder);
+								// 3.发送消息给modbus终端
+								sendMsg(modbusClientList.get(i).buffOutputStream, buffsend, buffsend.length);
+							}
 						}
 						/* -------------------------------------------------------------------- */
 						
@@ -595,7 +608,7 @@ public class Server implements ActionListener {
 			/**
 			 * 启动发送数据给modbus终端的线程，用于发送modbus命令给modbus终端
 			 * */
-			SendModbusMsgToTreminalThread modbusThread = new SendModbusMsgToTreminalThread(buffOutputStream);
+			SendModbusMsgToTreminalThread modbusThread = new SendModbusMsgToTreminalThread(this.addressIp, buffOutputStream);
 			modbusThread.start();
 			printInformation(1, "modbus终端客户端：开始进入modbus终端客户端线程,此线程执行一次后机会结束");
 
@@ -879,9 +892,11 @@ public class Server implements ActionListener {
 
 		//public boolean modbusMsgStarted = true;
 		private BufferedOutputStream buff;
+		private InetAddress addressIp; // 客户端的IP
 		
-		public SendModbusMsgToTreminalThread(BufferedOutputStream buffOutputStream) {
+		public SendModbusMsgToTreminalThread(InetAddress Ip, BufferedOutputStream buffOutputStream) {
 			super();
+			addressIp = Ip;
 			buff= buffOutputStream;
 		}
 
@@ -911,7 +926,7 @@ public class Server implements ActionListener {
 				if (countModbusMsg > 0) { // 数据库中有数据，这是就需要将数据发送给modbus终端,
 					printInformation(0, "//---辅助线程:数据库中有数据");
 					// 3.从数据库中获取modbusorder
-					Object[][] objModbusMsg = sqlitecrud.selectObject("ModbusMsg");// 从数据库中将modbus命令从数据库中取出来
+					Object[][] objModbusMsg = sqlitecrud.selectObject("ModbusMsg","terminalName",addressIp.toString());// 从数据库中将modbus命令从数据库中取出来
 					// 4.遍历所有的modbusorder
 					for (int i = 0; i < objModbusMsg.length; i++) {
 						// 5.组装0x07类型的消息
@@ -955,7 +970,7 @@ public class Server implements ActionListener {
 					for (int i = 0; i < objModbusMsg.length; i++) {
 
 						// 3.组装0x0E类型的消息
-						String strModbusOrder = new String(new byte[] {0x0E}) + objModbusMsg[i][0].toString(); 
+						String strModbusOrder = new String(new byte[] {0x0E}) + objModbusMsg[i][0].toString() + ByteUtil.intToString(objModbusMsg[i][1].toString().length()) + objModbusMsg[i][1].toString(); 
 						byte[] buffsend = strModbusOrder.getBytes();
 
 						// 4.发送消息给上位机
