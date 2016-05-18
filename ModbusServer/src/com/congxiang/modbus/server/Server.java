@@ -805,17 +805,17 @@ public class Server implements ActionListener {
 						strValuesOfMonitorData[0] = strTime;
 						strValuesOfMonitorData[1] = this.addressIp.toString(); // 存modbus终端的IP即可
 						strValuesOfMonitorData[2] = strModbusData.substring(0, 2);
-						strValuesOfMonitorData[3] = strModbusData.substring(2, strModbusData.length());
+						strValuesOfMonitorData[3] = strModbusData.substring(0, strModbusData.length());
 						sqlitecrud.insert("MonitorData", strValuesOfMonitorData);
 						
-						printInformation(2, "[监测数据]:时间-" + strValuesOfMonitorData[0] + ",设备-[" + strValuesOfMonitorData[1] + ":" + strValuesOfMonitorData[2] + "],数据-" + strValuesOfMonitorData[2] + strValuesOfMonitorData[3]);
+						printInformation(2, "[监测数据]:时间-" + strValuesOfMonitorData[0] + ",设备-[" + strValuesOfMonitorData[1] + ":" + strValuesOfMonitorData[2] + "],数据-" + strValuesOfMonitorData[3]);
 						
 						// 5.将监测数据实时发送给上位机，格式：功能码 + 时间 + 地址长度 + modbus终端的IP地址 + 下位设备ID + modbusdata
 						String strModbusDataToHost = new String(new byte[] {0x0B}) ; // 消息类型码0x0B
 						strModbusDataToHost = strModbusDataToHost + strValuesOfMonitorData[0];
 						strModbusDataToHost = strModbusDataToHost + ByteUtil.intToString(strValuesOfMonitorData[1].length()); // IP地址的长度
 						strModbusDataToHost = strModbusDataToHost + strValuesOfMonitorData[1];
-						strModbusDataToHost = strModbusDataToHost + strValuesOfMonitorData[2];
+						//strModbusDataToHost = strModbusDataToHost + strValuesOfMonitorData[2];
 						strModbusDataToHost = strModbusDataToHost + strValuesOfMonitorData[3];
 						
 						printInformation(1, "modbus终端客户端：发送给上位机的实时modbusdata监测数据为：" + strModbusDataToHost);
@@ -843,7 +843,7 @@ public class Server implements ActionListener {
 
 					// 在state表中插入一条下线的消息
 					SimpleDateFormat df = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");// 设置日期格式
-					printInformation(1, "modbus终端客户端：当前系统时间" + df.format(new Date()));// new
+					printInformation(-1, "modbus终端客户端：当前系统时间" + df.format(new Date()));// new
 																						// Date()为获取当前系统时间
 					String[] strValuesOfMonitorData = new String[4];
 					strValuesOfMonitorData[0] = df.format(new Date()).toString();
