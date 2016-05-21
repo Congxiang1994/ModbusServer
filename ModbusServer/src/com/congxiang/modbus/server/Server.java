@@ -1177,6 +1177,7 @@ public class Server implements ActionListener {
 
 		if (e.getSource() == serverPanel.btOpenServer) { /*--- 打开服务器*/
 			serverPanel.btOpenServer.setEnabled(false);
+			serverPanel.tfPort.setEnabled(false);
 			serverPanel.btCloseServer.setEnabled(true);
 			// ---------------------------------- 启动主线程
 			mainThread = new MainThread();
@@ -1185,6 +1186,7 @@ public class Server implements ActionListener {
 
 		} else if (e.getSource() == serverPanel.btCloseServer) { /*--- 关闭服务器*/
 			serverPanel.btOpenServer.setEnabled(true);
+			serverPanel.tfPort.setEnabled(true);
 			serverPanel.btCloseServer.setEnabled(false);
 			/* 如何正确关闭所有线程以及其他代码 */
 
@@ -1245,7 +1247,8 @@ public class Server implements ActionListener {
 			tainfo.selectAll();*/
 			SimpleDateFormat df = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");// 设置日期格式
 			serverPanel.tainfo.append("【" + df.format(new Date()).toString() + "】 " + strMsg + "\n");
-			serverPanel.tainfo.selectAll();
+			// serverPanel.tainfo.selectAll();
+			serverPanel.tainfo.setSelectionStart(serverPanel.tainfo.getText().length());
 			break;
 			
 		case -1:// 出错消息输出
