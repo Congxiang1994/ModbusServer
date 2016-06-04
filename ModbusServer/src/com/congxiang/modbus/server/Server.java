@@ -93,7 +93,7 @@ public class Server implements ActionListener {
 		serverPanel.btOpenServer.addActionListener(this);
 		serverPanel.btCloseServer.addActionListener(this);
 		
-		frame.setSize(500, 350); // 设置界面大小
+		frame.setSize(800, 600); // 设置界面大小
 		// this.setLocationRelativeTo(null); // 设置界面在屏幕中央显示
 		frame.setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE); // 设置单击关闭按钮能够关闭主进程，--------------------------------这里将来要改一下，不能直接关闭，因为这个程序充当服务器小程序
 		frame.addWindowListener(new WindowAdapter() {
@@ -629,7 +629,7 @@ public class Server implements ActionListener {
 			while (modbusConnectionStarted) {
 				////printInformation(1, "\n" + "modbus终端客户端：>>>>>>进入循环，开始接收消息<<<<<<");
 				try {
-					byte[] buffRecv = new byte[64];// 接收缓冲区，
+					byte[] buffRecv = new byte[1024];// 接收缓冲区，
 					/*
 					int numRecv = this.buffInputStream.read(buffRecv);// ---------------------------------------------------------------------read
 					*/
