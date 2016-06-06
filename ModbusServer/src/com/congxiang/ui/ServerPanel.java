@@ -67,7 +67,7 @@ public class ServerPanel extends JPanel {
 		// 设置按钮的初始化状态
 		btOpenServer.setEnabled(true);
 		btCloseServer.setEnabled(false);
-		tfPort.setText("8000");
+		tfPort.setText("9000");
 
 	}
 
