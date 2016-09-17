@@ -251,7 +251,7 @@ public class Server implements ActionListener {
 			this.buffOutputStream = new BufferedOutputStream(outPutStream);
 
 			printInformation(1, this.toString());
-			printInformation(2, "上位机客户端["+this.addressIp.toString()+"] 上线");
+			printInformation(2, "上位机客户端["+this.addressIp.toString()+":"+this.portNum+"] 上线");
 		}
 
 		@Override
@@ -550,7 +550,7 @@ public class Server implements ActionListener {
 			printInformation(-1, "上位机客户端：hostClientList的长度为：" + hostClientList.size());
 
 			printInformation(-1, "上位机客户端：该线程出现异常，本线程将自动结束！");
-			printInformation(2, "上位机客户端["+this.addressIp.toString()+"] 下线");
+			printInformation(2, "上位机客户端["+this.addressIp.toString()+":"+this.portNum+"] 下线");
 		}
 	}
 
